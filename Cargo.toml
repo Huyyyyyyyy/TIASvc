@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crates/app",
+    "crates/domain",
+    "crates/framework",
+    "crates/infra",
+    "main",
+]
