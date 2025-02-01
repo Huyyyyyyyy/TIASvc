@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+framework = { path = "../crates/framework" }
+infra = { path = "../crates/infra" }
+rocket = "0.5.1"
+dotenv = "0.15.0"
