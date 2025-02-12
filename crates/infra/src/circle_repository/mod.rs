@@ -4,14 +4,14 @@ use request_model::{Amount, Destination, Source, TransferRequest};
 use reqwest::{header::CONTENT_TYPE, Client, Error, RequestBuilder, Response};
 use serde::Serialize;
 use serde_json::{self, to_string, Value};
-use uuid::Uuid;
 use std::env;
+use uuid::Uuid;
 pub mod request_model;
 
 pub struct CircleRepository {
     client: Client,
-    base_url: String,
-    api_key: String,
+    mint_base_url: String,
+    mint_api_key: String,
 }
 
 pub enum RequestMethod {
@@ -23,8 +23,8 @@ impl CircleRepository {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            api_key: env::var("CIRCLE_API_KEY").expect("Circle API Key must be set"),
-            base_url: env::var("CIRCLE_BASE_URL").expect("Circle base url must be set"),
+            mint_api_key: env::var("CIRCLE_MINT_API_KEY").expect("Circle mint API Key must be set"),
+            mint_base_url: env::var("CIRCLE_MINT_BASE_URL").expect("Mint base url must be set"),
         }
     }
 
@@ -43,12 +43,10 @@ impl CircleRepository {
             RequestMethod::POST => self.client.post(endpoint),
         };
         request = request
-        .header("Authorization", format!("Bearer {}", self.api_key))
-        .header(CONTENT_TYPE, "application/json")
-        .body(json.clone());
-        
-        println!("{json}");
-    
+            .header("Authorization", format!("Bearer {}", self.mint_api_key))
+            .header(CONTENT_TYPE, "application/json")
+            .body(json.clone());
+
         let response = request
             .send()
             .await
@@ -58,7 +56,7 @@ impl CircleRepository {
     }
 
     async fn get_master_wallet_id(&self) -> Result<Response, Error> {
-        let endpoint = format!("{}/v1/configuration", self.base_url);
+        let endpoint = format!("{}/v1/configuration", self.mint_base_url);
         let response = self
             .send_request(None::<()>, &endpoint, RequestMethod::GET)
             .await;
@@ -74,7 +72,7 @@ impl PaymentRepository for CircleRepository {
         chain: &str,
         destination_address: &str,
     ) -> Result<String, String> {
-        let endpoint = format!("{}/v1/transfers", self.base_url);
+        let endpoint = format!("{}/v1/transfers", self.mint_base_url);
         let json_wallet = self
             .get_master_wallet_id()
             .await

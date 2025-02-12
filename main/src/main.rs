@@ -1,4 +1,4 @@
-use dotenv::dotenv;
+use dotenv::from_filename;
 use framework::handlers::transfers;
 use rocket::tokio;
 
@@ -7,7 +7,7 @@ extern crate rocket;
 
 #[tokio::main]
 pub async fn main() -> Result<(), rocket::Error> {
-    dotenv().ok();
+    from_filename("dev.env").expect("Failed to load env file");
     let _rocket = rocket::build()
         .mount("/", routes![transfers])
         .launch()
