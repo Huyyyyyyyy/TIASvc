@@ -10,14 +10,14 @@ impl PaymentService {
         Self { repository }
     }
 
-    pub async fn transfers(
+    pub async fn process_fiat(
         &self,
         amount: &str,
         chain: &str,
         destination_address: &str,
     ) -> Result<String, String> {
         self.repository
-            .transfers(amount, chain, destination_address)
+            .process_fiat(amount, chain, destination_address)
             .await
     }
 }
