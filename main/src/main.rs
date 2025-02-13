@@ -1,5 +1,5 @@
 use dotenv::from_filename;
-use framework::handlers::transfers;
+use framework::handlers::{crypto_transaction, fiat_transaction};
 use rocket::tokio;
 
 #[macro_use]
@@ -9,7 +9,7 @@ extern crate rocket;
 pub async fn main() -> Result<(), rocket::Error> {
     from_filename("dev.env").expect("Failed to load env file");
     let _rocket = rocket::build()
-        .mount("/", routes![transfers])
+        .mount("/", routes![fiat_transaction, crypto_transaction])
         .launch()
         .await?;
     Ok(())
