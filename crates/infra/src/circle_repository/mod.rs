@@ -66,7 +66,7 @@ impl CircleRepository {
 
 #[async_trait]
 impl PaymentRepository for CircleRepository {
-    async fn transfers(
+    async fn process_fiat(
         &self,
         amount: &str,
         chain: &str,

@@ -19,3 +19,5 @@ jsonrpsee = { version = "0.24.2", features = [
     "ws-client",
 ] }
 ethers = "2.0"
+eyre = "0.6.8"
+anyhow = "1.0.95"
