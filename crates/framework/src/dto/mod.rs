@@ -3,7 +3,7 @@ use rocket::serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct GeneralResponseDTO {
-    pub status: String,
+    pub status: i32,
     pub message: String,
     pub data: String,
 }
