@@ -2,7 +2,9 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
 use ethers::{abi::Abi, prelude::*};
-use std::{env, fs::File, io::Read, sync::Arc};
+use std::{env, sync::Arc};
+
+use crate::contract_abi::{CT_LINK, CT_USDC};
 
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
@@ -20,8 +22,8 @@ pub enum ContractABI {
 impl ContractABI {
     pub fn get_contract_abi(&self) -> String {
         match self {
-            ContractABI::USDC => "../crates/infra/src/contract_abi/ct-usdc.json".to_string(),
-            ContractABI::LINK => "../crates/infra/src/contract_abi/ct-link.json".to_string(),
+            ContractABI::USDC => CT_USDC.to_string(),
+            ContractABI::LINK => CT_LINK.to_string(),
             ContractABI::NONE => "".to_string(),
         }
     }
@@ -79,11 +81,8 @@ impl InfuraRepository {
             wallet.with_chain_id(chain_id.as_u64()),
         ));
 
-        //get abi (json file)
-        println!("{:?}", contract.clone());
-        let mut file = File::open(contract.get_contract_abi()).unwrap();
-        let mut abi_string = String::new();
-        file.read_to_string(&mut abi_string).unwrap();
+        //get abi contract
+        let abi_string = contract.get_contract_abi();
         let abi: Abi = serde_json::from_str(&abi_string).unwrap();
 
         //get contract address base on chain -> this address will be taken on the .env file
