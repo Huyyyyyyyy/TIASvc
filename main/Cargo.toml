@@ -8,6 +8,4 @@ framework = { path = "../crates/framework" }
 infra = { path = "../crates/infra" }
 rocket = "0.5.1"
 dotenv = "0.15.0"
-serde_json = "1.0.138"
 lambda_http = "0.14.0"
-openssl-sys = "0.9.105"
