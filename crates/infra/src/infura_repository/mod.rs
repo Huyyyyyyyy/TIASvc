@@ -1,12 +1,9 @@
+use crate::contract_abi::{CT_LINK, CT_USDC};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
-use ethers::{abi::Abi, prelude::*};
-use serde_json::Value;
+use ethers::{abi::Abi, prelude::*, utils};
 use std::{env, sync::Arc};
-
-use crate::contract_abi::{CT_LINK, CT_USDC};
-
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
     pub base_url: String,
@@ -17,6 +14,7 @@ pub struct InfuraRepository {
 pub enum ContractABI {
     USDC,
     LINK,
+    ETH,
     NONE,
 }
 
@@ -25,6 +23,7 @@ impl ContractABI {
         match self {
             ContractABI::USDC => CT_USDC.to_string(),
             ContractABI::LINK => CT_LINK.to_string(),
+            ContractABI::ETH => "".to_string(),
             ContractABI::NONE => "".to_string(),
         }
     }
@@ -45,6 +44,7 @@ impl ContractABI {
         match chain.to_lowercase().as_str() {
             "usdc" => ContractABI::USDC,
             "link" => ContractABI::LINK,
+            "eth" => ContractABI::ETH,
             _ => ContractABI::NONE,
         }
     }
@@ -76,11 +76,27 @@ impl InfuraRepository {
         Ok(decimal_amount)
     }
 
+    async fn establish_contract_erc20(
+        &self,
+        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        contract: ContractABI,
+    ) -> Result<Contract<SignerMiddleware<Provider<Http>, LocalWallet>>> {
+        //get abi contract
+        let abi_string = contract.get_contract_abi();
+        let abi: Abi = serde_json::from_str(&abi_string).unwrap();
+
+        //get contract address base on chain -> this address will be taken on the .env file
+        let contract_address = contract.get_contract_address().parse::<Address>().unwrap();
+
+        //build the contract token
+        let contract = Contract::new(contract_address, abi, client);
+        Ok(contract)
+    }
+
     async fn establish_signer_wallet(
         &self,
         signer_private_key: &str,
-        contract: ContractABI,
-    ) -> Result<Contract<SignerMiddleware<Provider<Http>, LocalWallet>>> {
+    ) -> Result<Arc<SignerMiddleware<Provider<Http>, LocalWallet>>> {
         //build the infura provider
         let rpc_url = format!("{}/v3/{}", self.base_url, self.api_key);
         let provider = Provider::<Http>::try_from(rpc_url).unwrap();
@@ -98,16 +114,7 @@ impl InfuraRepository {
             wallet.with_chain_id(chain_id.as_u64()),
         ));
 
-        //get abi contract
-        let abi_string = contract.get_contract_abi();
-        let abi: Abi = serde_json::from_str(&abi_string).unwrap();
-
-        //get contract address base on chain -> this address will be taken on the .env file
-        let contract_address = contract.get_contract_address().parse::<Address>().unwrap();
-
-        //build the contract token
-        let contract = Contract::new(contract_address, abi, client);
-        Ok(contract)
+        Ok(client)
     }
 }
 
@@ -121,28 +128,38 @@ impl Web3Repository for InfuraRepository {
         chain: &str,
     ) -> Result<String> {
         let contract_abi = ContractABI::map_token_contract(chain);
-        let contract = self
-            .establish_signer_wallet(sender_private_key, contract_abi)
-            .await?;
-
-        let decimal_amount = self.parse_amount(contract.clone(), amount).await?;
-
+        let client = self.establish_signer_wallet(sender_private_key).await?;
         let recipient = recipient_address
             .parse::<Address>()
             .map_err(|e| anyhow!("Invalid recipient address: {}", e))?;
 
-        let transaction =
-            contract.method::<(Address, U256), H256>("transfer", (recipient, decimal_amount))?;
+        //check to know the contract is ETH or else
+        let rs = match contract_abi {
+            //if it is ETH so no need to create contract erc20
+            ContractABI::ETH => {
+                let tx = TransactionRequest::new()
+                    .to(recipient)
+                    .value(U256::from(utils::parse_ether(amount)?));
 
-        let pending_transaction = transaction.send().await?;
-        let receipt = pending_transaction.await?;
+                let pending_tx = client.send_transaction(tx, None).await?;
+                let receipt = pending_tx.await?.unwrap_or_default();
 
-        let json_str = serde_json::to_string(&receipt)
-            .map_err(|e| anyhow!("Failed to serialize transaction receipt: {}", e))?;
+                format!("{:?}", receipt.transaction_hash)
+            }
+            //if it is not ETH so must create erc20 contract
+            _ => {
+                let contract = self.establish_contract_erc20(client, contract_abi).await?;
+                let decimal_amount = self.parse_amount(contract.clone(), amount).await?;
 
-        let json_value: Value = serde_json::from_str(&json_str)?;
-        let transaction_hash = json_value["transactionHash"].as_str().unwrap_or_default();
+                let transaction = contract
+                    .method::<(Address, U256), H256>("transfer", (recipient, decimal_amount))?;
 
-        Ok(transaction_hash.to_string())
+                let pending_transaction = transaction.send().await?;
+                let receipt = pending_transaction.await?.unwrap_or_default();
+
+                format!("{:?}", receipt.transaction_hash)
+            }
+        };
+        Ok(rs)
     }
 }
