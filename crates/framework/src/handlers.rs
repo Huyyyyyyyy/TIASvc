@@ -1,4 +1,7 @@
-use crate::dto::{CryptoTransactionRequestDTO, FiatTransactionRequestDTO};
+use crate::{
+    dto::{CryptoTransactionRequestDTO, FiatTransactionRequestDTO},
+    helper::{get_failed_response, get_success_response},
+};
 use app::{
     self,
     usecase::{payment_service::PaymentService, web3_service::Web3Service},
@@ -7,6 +10,7 @@ use infra::{self, circle_repository::CircleRepository, infura_repository::Infura
 use lambda_http::{aws_lambda_events::encodings::Error, Body, Request, Response};
 use std::sync::Arc;
 
+//transaction to transfer fiat to users wallet after banking payment
 pub async fn fiat_transaction(event: Request) -> Result<Response<Body>, Error> {
     let repository = Arc::new(CircleRepository::new());
     let payment_service = PaymentService::new(repository);
@@ -23,18 +27,12 @@ pub async fn fiat_transaction(event: Request) -> Result<Response<Body>, Error> {
         )
         .await
     {
-        Ok(response) => Ok(Response::builder()
-            .status(200)
-            .header("Content-Type", "application/json")
-            .body(Body::Text(response))
-            .unwrap()),
-        Err(error) => Ok(Response::builder()
-            .status(400)
-            .body(Body::Text(error))
-            .unwrap()),
+        Ok(response) => Ok(get_success_response(response)),
+        Err(error) => Ok(get_failed_response(error)),
     }
 }
 
+//transaction to transfer erc20 token between users
 pub async fn crypto_transaction(event: Request) -> Result<Response<Body>, Error> {
     let repository = Arc::new(InfuraRepository::new());
     let web3_service = Web3Service::new(repository);
@@ -52,14 +50,7 @@ pub async fn crypto_transaction(event: Request) -> Result<Response<Body>, Error>
         )
         .await
     {
-        Ok(response) => Ok(Response::builder()
-            .status(200)
-            .header("Content-Type", "application/json")
-            .body(Body::Text(response))
-            .unwrap()),
-        Err(error) => Ok(Response::builder()
-            .status(400)
-            .body(Body::Text(error.to_string()))
-            .unwrap()),
+        Ok(response) => Ok(get_success_response(response)),
+        Err(error) => Ok(get_failed_response(error.to_string())),
     }
 }

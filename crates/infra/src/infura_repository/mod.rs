@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
 use ethers::{abi::Abi, prelude::*};
+use serde_json::Value;
 use std::{env, sync::Arc};
 
 use crate::contract_abi::{CT_LINK, CT_USDC};
@@ -59,6 +60,22 @@ impl InfuraRepository {
         }
     }
 
+    async fn parse_amount(
+        &self,
+        contract: Contract<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        amount: &str,
+    ) -> Result<U256> {
+        let whole_amount = amount
+            .parse::<f64>()
+            .map_err(|e| anyhow!("Failed to parse amount: {}", e))?;
+
+        let decimals: u8 = contract.method::<(), u8>("decimals", ())?.call().await?;
+
+        let multiplier = 10f64.powi(decimals as i32);
+        let decimal_amount = U256::from((whole_amount * multiplier) as u128);
+        Ok(decimal_amount)
+    }
+
     async fn establish_signer_wallet(
         &self,
         signer_private_key: &str,
@@ -103,19 +120,12 @@ impl Web3Repository for InfuraRepository {
         amount: &str,
         chain: &str,
     ) -> Result<String> {
-        let contract = ContractABI::map_token_contract(chain);
+        let contract_abi = ContractABI::map_token_contract(chain);
         let contract = self
-            .establish_signer_wallet(sender_private_key, contract)
+            .establish_signer_wallet(sender_private_key, contract_abi)
             .await?;
 
-        let whole_amount = amount
-            .parse::<f64>()
-            .map_err(|e| anyhow!("Failed to parse amount: {}", e))?;
-
-        let decimals: u8 = contract.method::<(), u8>("decimals", ())?.call().await?;
-
-        let multiplier = 10f64.powi(decimals as i32);
-        let decimal_amount = U256::from((whole_amount * multiplier) as u128);
+        let decimal_amount = self.parse_amount(contract.clone(), amount).await?;
 
         let recipient = recipient_address
             .parse::<Address>()
@@ -130,6 +140,9 @@ impl Web3Repository for InfuraRepository {
         let json_str = serde_json::to_string(&receipt)
             .map_err(|e| anyhow!("Failed to serialize transaction receipt: {}", e))?;
 
-        Ok(json_str)
+        let json_value: Value = serde_json::from_str(&json_str)?;
+        let transaction_hash = json_value["transactionHash"].as_str().unwrap_or_default();
+
+        Ok(transaction_hash.to_string())
     }
 }
