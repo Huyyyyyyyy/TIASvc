@@ -52,11 +52,15 @@ impl ContractABI {
 
 impl InfuraRepository {
     pub fn new() -> Self {
+        //build the infura provider for reusable
         let base_url = env::var("INFURA_BASE_URL").expect("Infura base url must be set");
+        let api_key = env::var("INFURA_API_KEY").expect("Infura api key must be set");
+        let rpc_url = format!("{}/v3/{}", base_url, api_key);
+        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
         Self {
-            provider: Provider::<Http>::try_from(&base_url).unwrap(),
+            provider,
             base_url,
-            api_key: env::var("INFURA_API_KEY").expect("Infura api key must be set"),
+            api_key,
         }
     }
 
@@ -98,9 +102,7 @@ impl InfuraRepository {
         signer_private_key: &str,
     ) -> Result<Arc<SignerMiddleware<Provider<Http>, LocalWallet>>> {
         //build the infura provider
-        let rpc_url = format!("{}/v3/{}", self.base_url, self.api_key);
-        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
-        let chain_id = provider.clone().get_chainid().await.unwrap();
+        let chain_id = self.provider.clone().get_chainid().await.unwrap();
 
         //build the wallet base on signer private key
         let wallet: LocalWallet = signer_private_key
@@ -110,7 +112,7 @@ impl InfuraRepository {
 
         //combine both of those above to a client provider
         let client = Arc::new(SignerMiddleware::new(
-            provider.clone(),
+            self.provider.clone(),
             wallet.with_chain_id(chain_id.as_u64()),
         ));
 
@@ -120,7 +122,7 @@ impl InfuraRepository {
 
 #[async_trait]
 impl Web3Repository for InfuraRepository {
-    async fn transfer_erc20_token(
+    async fn transfer_token(
         &self,
         sender_private_key: &str,
         recipient_address: &str,
@@ -151,15 +153,38 @@ impl Web3Repository for InfuraRepository {
                 let contract = self.establish_contract_erc20(client, contract_abi).await?;
                 let decimal_amount = self.parse_amount(contract.clone(), amount).await?;
 
-                let transaction = contract
+                let tx = contract
                     .method::<(Address, U256), H256>("transfer", (recipient, decimal_amount))?;
 
-                let pending_transaction = transaction.send().await?;
-                let receipt = pending_transaction.await?.unwrap_or_default();
+                let pending_tx = tx.send().await?;
+                let receipt = pending_tx.await?.unwrap_or_default();
 
                 format!("{:?}", receipt.transaction_hash)
             }
         };
         Ok(rs)
+    }
+
+    async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
+        let client = self.establish_signer_wallet(signer_private_key).await?;
+        let contract = ContractABI::map_token_contract(chain);
+        let address = client.address();
+
+        match contract {
+            ContractABI::ETH => {
+                let balance = self.provider.clone().get_balance(address, None).await?;
+                let formatted_balance = utils::format_units(balance, 18)?;
+                Ok(formatted_balance.to_string())
+            }
+            _ => {
+                let token_contract = self.establish_contract_erc20(client, contract).await?;
+                // Retrieve decimals of the contract token for convert balance
+                let decimals: u8 = token_contract.method("decimals", ())?.call().await?;
+                //retrieve and convert token balance by decimals
+                let balance: U256 = token_contract.method("balanceOf", address)?.call().await?;
+                let formatted_balance = utils::format_units(balance, decimals as i32)?;
+                Ok(formatted_balance.to_string())
+            }
+        }
     }
 }

@@ -21,6 +21,6 @@ jsonrpsee = { version = "0.24.2", features = [
     "http-client",
     "ws-client",
 ] }
-ethers = { version = "2.0", default-features = false }
+ethers = { version = "2.0", default-features = false, features = ["rustls"] }
 eyre = { version = "0.6.8", default-features = false }
 anyhow = { version = "1.0.95", default-features = false }

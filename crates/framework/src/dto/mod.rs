@@ -25,3 +25,11 @@ pub struct CryptoTransactionRequestDTO {
     pub amount: String,
     pub chain: String,
 }
+
+//Crypto Balance transaction
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct CryptoBalanceRequestDTO {
+    pub signer_private_key: String,
+    pub chain: String,
+}

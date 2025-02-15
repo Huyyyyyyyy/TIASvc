@@ -12,7 +12,7 @@ impl Web3Service {
         Self { repository }
     }
 
-    pub async fn transfer_erc20_token(
+    pub async fn transfer_token(
         &self,
         sender_private_key: &str,
         recipient_address: &str,
@@ -20,7 +20,11 @@ impl Web3Service {
         chain: &str,
     ) -> Result<String> {
         self.repository
-            .transfer_erc20_token(sender_private_key, recipient_address, amount, chain)
+            .transfer_token(sender_private_key, recipient_address, amount, chain)
             .await
+    }
+
+    pub async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
+        self.repository.get_balance(signer_private_key, chain).await
     }
 }
