@@ -27,4 +27,12 @@ impl Web3Service {
     pub async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
         self.repository.get_balance(signer_private_key, chain).await
     }
+
+    pub async fn get_wallet(&self, signer_private_key: &str) -> Result<String> {
+        self.repository.get_wallet(signer_private_key).await
+    }
+
+    pub async fn create_wallet(&self) -> Result<(String, String)> {
+        self.repository.create_wallet().await
+    }
 }

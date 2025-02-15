@@ -1,5 +1,9 @@
 use crate::{
-    dto::{CryptoBalanceRequestDTO, CryptoTransactionRequestDTO, FiatTransactionRequestDTO},
+    dto::{
+        CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoTransactionRequestDTO,
+        CryptoTransactionResponseDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
+        CryptoWalletResponseDTO, FiatTransactionRequestDTO, FiatTransactionResponseDTO,
+    },
     helper::{get_failed_response, get_success_response},
 };
 use app::{
@@ -8,6 +12,7 @@ use app::{
 };
 use infra::{self, circle_repository::CircleRepository, infura_repository::InfuraRepository};
 use lambda_http::{aws_lambda_events::encodings::Error, Body, Request, Response};
+use serde_json::to_string;
 use std::sync::Arc;
 
 //transaction to transfer fiat to users wallet after banking payment
@@ -27,8 +32,12 @@ pub async fn fiat_transaction(event: Request) -> Result<Response<Body>, Error> {
         )
         .await
     {
-        Ok(response) => Ok(get_success_response(response)),
-        Err(error) => Ok(get_failed_response(error)),
+        Ok(response) => {
+            let rs = FiatTransactionResponseDTO { pakage: response };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(error) => Ok(get_failed_response(error, "Failed")),
     }
 }
 
@@ -50,8 +59,14 @@ pub async fn crypto_transaction(event: Request) -> Result<Response<Body>, Error>
         )
         .await
     {
-        Ok(response) => Ok(get_success_response(response)),
-        Err(error) => Ok(get_failed_response(error.to_string())),
+        Ok(response) => {
+            let rs = CryptoTransactionResponseDTO {
+                transaction_hash: response,
+            };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(error) => Ok(get_failed_response(error.to_string(), "Failed")),
     }
 }
 
@@ -71,7 +86,51 @@ pub async fn crypto_balance(event: Request) -> Result<Response<Body>, Error> {
         )
         .await
     {
-        Ok(response) => Ok(get_success_response(response)),
-        Err(err) => Ok(get_failed_response(err.to_string())),
+        Ok(response) => {
+            let rs = CryptoBalanceResponseDTO { balance: response };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
+}
+
+//allow user to get their wallet by their private key
+pub async fn crypto_wallet(event: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let crypto_wallet_request: CryptoWalletRequestDTO = serde_json::from_str(&body_str)?;
+
+    match web3_service
+        .get_wallet(&crypto_wallet_request.signer_private_key)
+        .await
+    {
+        Ok(response) => {
+            let rs = CryptoWalletResponseDTO { address: response };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
+}
+
+//user can create their own wallet
+pub async fn crypto_wallet_creation(_: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    match web3_service.create_wallet().await {
+        Ok(response) => {
+            let rs = CryptoWalletCreationResponseDTO {
+                addess: response.0,
+                private_key: response.1,
+            };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
     }
 }

@@ -1,8 +1,8 @@
 use crate::contract_abi::{CT_LINK, CT_USDC};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
-use ethers::{abi::Abi, prelude::*, utils};
+use ethers::{abi::Abi, core::rand::thread_rng, prelude::*, utils};
 use std::{env, sync::Arc};
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
@@ -186,5 +186,25 @@ impl Web3Repository for InfuraRepository {
                 Ok(formatted_balance.to_string())
             }
         }
+    }
+
+    async fn get_wallet(&self, signer_private_key: &str) -> Result<String> {
+        //do it like establishing a client wallet
+        let chain_id = self.provider.clone().get_chainid().await?;
+        let wallet = signer_private_key
+            .parse::<LocalWallet>()?
+            .with_chain_id(chain_id.as_u64());
+
+        //just return the wallet address as string
+        let address = format!("{:?}", wallet.address());
+        Ok(address)
+    }
+
+    async fn create_wallet(&self) -> Result<(String, String)> {
+        let wallet = LocalWallet::new(&mut thread_rng());
+        let private_key = hex::encode(wallet.signer().to_bytes());
+        let address = format!("{:?}", wallet.address());
+
+        Ok((address, private_key))
     }
 }
