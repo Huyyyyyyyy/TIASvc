@@ -1,8 +1,9 @@
 use crate::{
     dto::{
-        CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoTransactionRequestDTO,
-        CryptoTransactionResponseDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
-        CryptoWalletResponseDTO, FiatTransactionRequestDTO, FiatTransactionResponseDTO,
+        CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
+        CryptoSwapResponseDTO, CryptoTransactionRequestDTO, CryptoTransactionResponseDTO,
+        CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO, CryptoWalletResponseDTO,
+        FiatTransactionRequestDTO, FiatTransactionResponseDTO,
     },
     helper::{get_failed_response, get_success_response},
 };
@@ -125,8 +126,37 @@ pub async fn crypto_wallet_creation(_: Request) -> Result<Response<Body>, Error>
     match web3_service.create_wallet().await {
         Ok(response) => {
             let rs = CryptoWalletCreationResponseDTO {
-                addess: response.0,
+                address: response.0,
                 private_key: response.1,
+            };
+            let json_str = to_string(&rs).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
+}
+
+//user can swap their crypto
+pub async fn crypto_swap(event: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let crypto_swap_request: CryptoSwapRequestDTO = serde_json::from_str(&body_str)?;
+
+    match web3_service
+        .swap(
+            &crypto_swap_request.from_token,
+            &crypto_swap_request.to_token,
+            &crypto_swap_request.amount,
+            &crypto_swap_request.signer_private_key,
+        )
+        .await
+    {
+        Ok(response) => {
+            let rs = CryptoSwapResponseDTO {
+                transaction_hash: response,
             };
             let json_str = to_string(&rs).unwrap();
             Ok(get_success_response(json_str))

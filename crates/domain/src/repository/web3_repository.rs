@@ -16,4 +16,12 @@ pub trait Web3Repository: Send + Sync {
     async fn get_wallet(&self, signer_private_key: &str) -> Result<String>;
 
     async fn create_wallet(&self) -> Result<(String, String)>;
+
+    async fn swap(
+        &self,
+        from_token: &str,
+        to_token: &str,
+        amount: &str,
+        signer_private_key: &str,
+    ) -> Result<String>;
 }

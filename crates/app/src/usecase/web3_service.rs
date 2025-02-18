@@ -35,4 +35,16 @@ impl Web3Service {
     pub async fn create_wallet(&self) -> Result<(String, String)> {
         self.repository.create_wallet().await
     }
+
+    pub async fn swap(
+        &self,
+        from_token: &str,
+        to_token: &str,
+        amount: &str,
+        signer_private_key: &str,
+    ) -> Result<String> {
+        self.repository
+            .swap(from_token, to_token, amount, signer_private_key)
+            .await
+    }
 }

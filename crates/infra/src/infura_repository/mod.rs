@@ -1,20 +1,31 @@
-use crate::contract_abi::{CT_LINK, CT_USDC};
+use crate::contract_abi::{CT_LINK, CT_ROUTER02, CT_USDC, CT_WETH};
 use anyhow::{anyhow, Ok, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
-use ethers::{abi::Abi, core::rand::thread_rng, prelude::*, utils};
-use std::{env, sync::Arc};
+use ethers::{
+    abi::Abi,
+    core::rand::thread_rng,
+    prelude::*,
+    utils::{self, parse_units},
+};
+use std::{
+    env,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
     pub base_url: String,
     pub api_key: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ContractABI {
     USDC,
     LINK,
     ETH,
+    WETH,
+    ROUTER02,
     NONE,
 }
 
@@ -24,6 +35,8 @@ impl ContractABI {
             ContractABI::USDC => CT_USDC.to_string(),
             ContractABI::LINK => CT_LINK.to_string(),
             ContractABI::ETH => "".to_string(),
+            ContractABI::WETH => CT_WETH.to_string(),
+            ContractABI::ROUTER02 => CT_ROUTER02.to_string(),
             ContractABI::NONE => "".to_string(),
         }
     }
@@ -36,6 +49,12 @@ impl ContractABI {
             ContractABI::LINK => {
                 env::var("CONTRACT_LINK").expect("LINK contract address must be set")
             }
+            ContractABI::WETH => {
+                env::var("CONTRACT_WETH").expect("WETH contract address must be set")
+            }
+            ContractABI::ROUTER02 => {
+                env::var("CONTRACT_ROUTER02").expect("ROUTER02 contract address must be set")
+            }
             _ => "".to_string(),
         }
     }
@@ -45,7 +64,39 @@ impl ContractABI {
             "usdc" => ContractABI::USDC,
             "link" => ContractABI::LINK,
             "eth" => ContractABI::ETH,
+            "weth" => ContractABI::WETH,
+            "router02" => ContractABI::ROUTER02,
             _ => ContractABI::NONE,
+        }
+    }
+}
+
+//swap method
+#[derive(Debug, Clone, Copy)]
+pub enum SwapMethod {
+    SwapTokensForExactETH,
+    SwapETHForExactTokens,
+    SwapTokensForExactTokens,
+}
+
+impl SwapMethod {
+    fn map_swap_method(from: ContractABI, to: ContractABI) -> Result<SwapMethod> {
+        match (from, to) {
+            (ContractABI::ETH, t) if t != ContractABI::ETH => Ok(SwapMethod::SwapETHForExactTokens),
+            (f, ContractABI::ETH) if f != ContractABI::ETH => Ok(SwapMethod::SwapTokensForExactETH),
+            (f, t) if f != ContractABI::ETH && t != ContractABI::ETH => {
+                Ok(SwapMethod::SwapTokensForExactTokens)
+            }
+            //all the others not match -> say we don't support
+            _ => Err(anyhow!("Not support pairs to swap")),
+        }
+    }
+
+    fn to_string(&self) -> String {
+        match self {
+            SwapMethod::SwapETHForExactTokens => "swapETHForExactTokens".to_string(),
+            SwapMethod::SwapTokensForExactETH => "swapTokensForExactETH".to_string(),
+            SwapMethod::SwapTokensForExactTokens => "swapTokensForExactTokens".to_string(),
         }
     }
 }
@@ -97,6 +148,23 @@ impl InfuraRepository {
         Ok(contract)
     }
 
+    async fn establish_contract_router(
+        &self,
+        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        contract: ContractABI,
+    ) -> Result<Contract<SignerMiddleware<Provider<Http>, LocalWallet>>> {
+        //get abi contract
+        let abi_string = contract.get_contract_abi();
+        let abi: Abi = serde_json::from_str(&abi_string).unwrap();
+
+        //get contract address base on chain -> this address will be taken on the .env file
+        let contract_address = contract.get_contract_address().parse::<Address>().unwrap();
+
+        //build the contract token
+        let contract = Contract::new(contract_address, abi, client);
+        Ok(contract)
+    }
+
     async fn establish_signer_wallet(
         &self,
         signer_private_key: &str,
@@ -117,6 +185,13 @@ impl InfuraRepository {
         ));
 
         Ok(client)
+    }
+
+    fn get_valid_timestamp(&self, future_millis: u128) -> u128 {
+        let start = SystemTime::now();
+        let since_epoch = start.duration_since(UNIX_EPOCH).unwrap();
+        let time_millis = since_epoch.as_millis().checked_add(future_millis).unwrap();
+        time_millis
     }
 }
 
@@ -206,5 +281,102 @@ impl Web3Repository for InfuraRepository {
         let address = format!("{:?}", wallet.address());
 
         Ok((address, private_key))
+    }
+
+    async fn swap(
+        &self,
+        from_token: &str,
+        to_token: &str,
+        amount: &str,
+        signer_private_key: &str,
+    ) -> Result<String> {
+        //establish the client provider
+        let client = self.establish_signer_wallet(signer_private_key).await?;
+        let signer_address = client.address();
+
+        //establish contract of uniswap
+        let contract_router = self
+            .establish_contract_router(client.clone(), ContractABI::ROUTER02)
+            .await?;
+        let router20_address = contract_router.address();
+
+        //get from contract
+        let from_detect = ContractABI::map_token_contract(&from_token);
+        let from_contract = self
+            .establish_contract_erc20(client.clone(), from_detect)
+            .await?;
+        let from_address = from_contract.address();
+
+        //get destination contract
+        let destination_detect = ContractABI::map_token_contract(&to_token);
+        let destination_contract = self
+            .establish_contract_erc20(client.clone(), destination_detect)
+            .await?;
+        let destination_address = destination_contract.address();
+
+        //process the amount
+        let decimals: u8 = from_contract.method("decimals", ())?.call().await?;
+        let approval_amount = parse_units(amount, decimals as i32)?.to_string();
+        let range_expected: Vec<U256> = contract_router
+            .method(
+                "getAmountsOut",
+                (
+                    U256::from_dec_str(&approval_amount).unwrap(),
+                    vec![from_address, destination_address],
+                ),
+            )?
+            .call()
+            .await?;
+        let expected_amount = range_expected
+            .last()
+            .ok_or_else(|| anyhow!("No expected amount"))?;
+        let amount_out_min = expected_amount * U256::from(95) / U256::from(100);
+
+        //send request to usdc contract for approve amount
+        let approve_tx = from_contract.method::<_, H256>(
+            "approve",
+            (
+                router20_address,
+                U256::from_dec_str(&approval_amount).unwrap(),
+            ),
+        )?;
+        let pending_approve_tx = approve_tx.send().await?;
+        pending_approve_tx.await?;
+
+        //timestamp deadline
+        let valid_time = self.get_valid_timestamp(300000);
+        let u256_timestamp = U256::from_dec_str(&valid_time.to_string()).unwrap();
+
+        //send request to swap token
+        let method = SwapMethod::map_swap_method(from_detect, destination_detect)?;
+        let swap_tx = match method {
+            SwapMethod::SwapETHForExactTokens => contract_router.method::<_, H256>(
+                &SwapMethod::to_string(&method),
+                (
+                    U256::from_dec_str(&approval_amount).unwrap(),
+                    vec![from_address, destination_address],
+                    signer_address,
+                    u256_timestamp,
+                ),
+            )?,
+            _ => contract_router.method::<_, H256>(
+                &SwapMethod::to_string(&method),
+                (
+                    U256::from_dec_str(&approval_amount).unwrap(),
+                    amount_out_min,
+                    vec![from_address, destination_address],
+                    signer_address,
+                    u256_timestamp,
+                ),
+            )?,
+        };
+        let pending_swap_tx = swap_tx.send().await?;
+        let minted_swap_tx = pending_swap_tx.await?;
+        if minted_swap_tx.is_some() {
+            let rs = format!("{:?}", minted_swap_tx.unwrap().transaction_hash);
+            Ok(rs)
+        } else {
+            Ok("".to_string())
+        }
     }
 }

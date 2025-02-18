@@ -71,6 +71,22 @@ pub struct CryptoWalletResponseDTO {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct CryptoWalletCreationResponseDTO {
-    pub addess: String,
+    pub address: String,
     pub private_key: String,
+}
+
+//Crypto Swap
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct CryptoSwapRequestDTO {
+    pub from_token: String,
+    pub to_token: String,
+    pub amount: String,
+    pub signer_private_key: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct CryptoSwapResponseDTO {
+    pub transaction_hash: String,
 }
