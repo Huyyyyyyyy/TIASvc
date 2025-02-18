@@ -82,9 +82,13 @@ pub enum SwapMethod {
 impl SwapMethod {
     fn map_swap_method(from: ContractABI, to: ContractABI) -> Result<SwapMethod> {
         match (from, to) {
-            (ContractABI::ETH, t) if t != ContractABI::ETH => Ok(SwapMethod::SwapETHForExactTokens),
-            (f, ContractABI::ETH) if f != ContractABI::ETH => Ok(SwapMethod::SwapTokensForExactETH),
-            (f, t) if f != ContractABI::ETH && t != ContractABI::ETH => {
+            (ContractABI::WETH, t) if t != ContractABI::WETH => {
+                Ok(SwapMethod::SwapETHForExactTokens)
+            }
+            (f, ContractABI::WETH) if f != ContractABI::WETH => {
+                Ok(SwapMethod::SwapTokensForExactETH)
+            }
+            (f, t) if f != ContractABI::WETH && t != ContractABI::WETH => {
                 Ok(SwapMethod::SwapTokensForExactTokens)
             }
             //all the others not match -> say we don't support
@@ -301,14 +305,22 @@ impl Web3Repository for InfuraRepository {
         let router20_address = contract_router.address();
 
         //get from contract
-        let from_detect = ContractABI::map_token_contract(&from_token);
+        let mut from_detect = ContractABI::map_token_contract(&from_token);
+        //need to map again because ETH use WETH to swap
+        if from_detect == ContractABI::ETH {
+            from_detect = ContractABI::WETH;
+        }
         let from_contract = self
             .establish_contract_erc20(client.clone(), from_detect)
             .await?;
         let from_address = from_contract.address();
 
         //get destination contract
-        let destination_detect = ContractABI::map_token_contract(&to_token);
+        let mut destination_detect = ContractABI::map_token_contract(&to_token);
+        //need to map again because ETH use WETH to swap
+        if destination_detect == ContractABI::ETH {
+            destination_detect = ContractABI::WETH;
+        }
         let destination_contract = self
             .establish_contract_erc20(client.clone(), destination_detect)
             .await?;
