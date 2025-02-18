@@ -3,7 +3,7 @@ use anyhow::{anyhow, Ok, Result};
 use async_trait::async_trait;
 use domain::repository::web3_repository::Web3Repository;
 use ethers::{
-    abi::{decode, Abi, ParamType},
+    abi::Abi,
     core::rand::thread_rng,
     prelude::*,
     utils::{self, parse_units},
