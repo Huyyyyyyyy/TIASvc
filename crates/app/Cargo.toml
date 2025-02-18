@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 domain = { path = "../domain" }
-anyhow = "1.0.95"
+anyhow = { version = "1.0.95", default-features = false }

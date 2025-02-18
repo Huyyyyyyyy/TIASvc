@@ -5,7 +5,7 @@ pub fn get_success_response(data: String) -> Response<Body> {
     let general_response = GeneralResponseDTO {
         status: 200,
         message: "success".to_string(),
-        data,
+        data: serde_json::from_str(&data).unwrap(),
     };
 
     Response::builder()
@@ -17,11 +17,11 @@ pub fn get_success_response(data: String) -> Response<Body> {
         .unwrap()
 }
 
-pub fn get_failed_response(data: String) -> Response<Body> {
+pub fn get_failed_response(data: String, message: &str) -> Response<Body> {
     let general_response = GeneralResponseDTO {
         status: 400,
-        message: data,
-        data: "".to_string(),
+        message: message.to_string(),
+        data: serde_json::from_str(&data).unwrap(),
     };
 
     Response::builder()
