@@ -74,22 +74,22 @@ impl ContractABI {
 //swap method
 #[derive(Debug, Clone, Copy)]
 pub enum SwapMethod {
-    SwapTokensForExactETH,
-    SwapETHForExactTokens,
-    SwapTokensForExactTokens,
+    SwapExactTokensForETH,
+    SwapExactETHForTokens,
+    SwapExactTokensForTokens,
 }
 
 impl SwapMethod {
     fn map_swap_method(from: ContractABI, to: ContractABI) -> Result<SwapMethod> {
         match (from, to) {
             (ContractABI::WETH, t) if t != ContractABI::WETH => {
-                Ok(SwapMethod::SwapETHForExactTokens)
+                Ok(SwapMethod::SwapExactETHForTokens)
             }
             (f, ContractABI::WETH) if f != ContractABI::WETH => {
-                Ok(SwapMethod::SwapTokensForExactETH)
+                Ok(SwapMethod::SwapExactTokensForETH)
             }
             (f, t) if f != ContractABI::WETH && t != ContractABI::WETH => {
-                Ok(SwapMethod::SwapTokensForExactTokens)
+                Ok(SwapMethod::SwapExactTokensForTokens)
             }
             //all the others not match -> say we don't support
             _ => Err(anyhow!("Not support pairs to swap")),
@@ -98,16 +98,16 @@ impl SwapMethod {
 
     fn to_string(&self) -> String {
         match self {
-            SwapMethod::SwapETHForExactTokens => "swapETHForExactTokens".to_string(),
-            SwapMethod::SwapTokensForExactETH => "swapTokensForExactETH".to_string(),
-            SwapMethod::SwapTokensForExactTokens => "swapTokensForExactTokens".to_string(),
+            SwapMethod::SwapExactETHForTokens => "swapExactETHForTokens".to_string(),
+            SwapMethod::SwapExactTokensForETH => "swapExactTokensForETH".to_string(),
+            SwapMethod::SwapExactTokensForTokens => "swapExactTokensForTokens".to_string(),
         }
     }
 }
 
+//core internal infura provider
 impl InfuraRepository {
     pub fn new() -> Self {
-        //build the infura provider for reusable
         let base_url = env::var("INFURA_BASE_URL").expect("Infura base url must be set");
         let api_key = env::var("INFURA_API_KEY").expect("Infura api key must be set");
         let rpc_url = format!("{}/v3/{}", base_url, api_key);
@@ -321,10 +321,8 @@ impl Web3Repository for InfuraRepository {
         if destination_detect == ContractABI::ETH {
             destination_detect = ContractABI::WETH;
         }
-        let destination_contract = self
-            .establish_contract_erc20(client.clone(), destination_detect)
-            .await?;
-        let destination_address = destination_contract.address();
+        let destination_address =
+            ContractABI::get_contract_address(&destination_detect).parse::<Address>()?;
 
         //process the amount
         let decimals: u8 = from_contract.method("decimals", ())?.call().await?;
@@ -362,15 +360,17 @@ impl Web3Repository for InfuraRepository {
         //send request to swap token
         let method = SwapMethod::map_swap_method(from_detect, destination_detect)?;
         let swap_tx = match method {
-            SwapMethod::SwapETHForExactTokens => contract_router.method::<_, H256>(
-                &SwapMethod::to_string(&method),
-                (
-                    U256::from_dec_str(&approval_amount).unwrap(),
-                    vec![from_address, destination_address],
-                    signer_address,
-                    u256_timestamp,
-                ),
-            )?,
+            SwapMethod::SwapExactETHForTokens => contract_router
+                .method::<_, H256>(
+                    &SwapMethod::to_string(&method),
+                    (
+                        amount_out_min,
+                        vec![from_address, destination_address],
+                        signer_address,
+                        u256_timestamp,
+                    ),
+                )?
+                .value(U256::from_dec_str(&approval_amount).unwrap()),
             _ => contract_router.method::<_, H256>(
                 &SwapMethod::to_string(&method),
                 (
@@ -383,12 +383,8 @@ impl Web3Repository for InfuraRepository {
             )?,
         };
         let pending_swap_tx = swap_tx.send().await?;
-        let minted_swap_tx = pending_swap_tx.await?;
-        if minted_swap_tx.is_some() {
-            let rs = format!("{:?}", minted_swap_tx.unwrap().transaction_hash);
-            Ok(rs)
-        } else {
-            Ok("".to_string())
-        }
+        let receipt_swap_tx = pending_swap_tx.await.unwrap().unwrap();
+        let rs = format!("{:?}", receipt_swap_tx.transaction_hash);
+        Ok(rs)
     }
 }

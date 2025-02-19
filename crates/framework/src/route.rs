@@ -161,6 +161,8 @@ pub async fn crypto_swap(event: Request) -> Result<Response<Body>, Error> {
             let json_str = to_string(&rs).unwrap();
             Ok(get_success_response(json_str))
         }
-        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+        Err(err) => {
+            Ok(get_failed_response(err.to_string(), "Failed"))
+        }
     }
 }
