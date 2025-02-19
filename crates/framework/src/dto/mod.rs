@@ -2,8 +2,35 @@ use rocket::serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub enum TransactionType {
+    Swap,
+    FiatTransfer,
+    CryptoTransfer,
+}
+
+impl TransactionType {
+    pub fn map_tx_type(&self) -> String {
+        match self {
+            TransactionType::CryptoTransfer => "CryptoTransfer".to_string(),
+            TransactionType::FiatTransfer => "FiatTransfer".to_string(),
+            TransactionType::Swap => "Swap".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
-pub struct GeneralResponseDTO {
+pub struct GeneralTransactionResponseDTO {
+    pub status: i32,
+    #[serde(rename = "type")]
+    pub tx_type: String,
+    pub message: String,
+    pub data: Value,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct GeneralReadResponseDTO {
     pub status: i32,
     pub message: String,
     pub data: Value,

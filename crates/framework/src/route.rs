@@ -3,9 +3,12 @@ use crate::{
         CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
         CryptoSwapResponseDTO, CryptoTransactionRequestDTO, CryptoTransactionResponseDTO,
         CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO, CryptoWalletResponseDTO,
-        FiatTransactionRequestDTO, FiatTransactionResponseDTO,
+        FiatTransactionRequestDTO, FiatTransactionResponseDTO, TransactionType,
     },
-    helper::{get_failed_response, get_success_response},
+    helper::{
+        get_failed_response, get_success_response, process_failed_response,
+        process_success_response,
+    },
 };
 use app::{
     self,
@@ -36,9 +39,16 @@ pub async fn fiat_transaction(event: Request) -> Result<Response<Body>, Error> {
         Ok(response) => {
             let rs = FiatTransactionResponseDTO { pakage: response };
             let json_str = to_string(&rs).unwrap();
-            Ok(get_success_response(json_str))
+            Ok(process_success_response(
+                json_str,
+                TransactionType::FiatTransfer,
+            ))
         }
-        Err(error) => Ok(get_failed_response(error, "Failed")),
+        Err(error) => Ok(process_failed_response(
+            error,
+            "Failed",
+            TransactionType::FiatTransfer,
+        )),
     }
 }
 
@@ -65,9 +75,16 @@ pub async fn crypto_transaction(event: Request) -> Result<Response<Body>, Error>
                 transaction_hash: response,
             };
             let json_str = to_string(&rs).unwrap();
-            Ok(get_success_response(json_str))
+            Ok(process_success_response(
+                json_str,
+                TransactionType::CryptoTransfer,
+            ))
         }
-        Err(error) => Ok(get_failed_response(error.to_string(), "Failed")),
+        Err(error) => Ok(process_failed_response(
+            error.to_string(),
+            "Failed",
+            TransactionType::CryptoTransfer,
+        )),
     }
 }
 
@@ -159,10 +176,12 @@ pub async fn crypto_swap(event: Request) -> Result<Response<Body>, Error> {
                 transaction_hash: response,
             };
             let json_str = to_string(&rs).unwrap();
-            Ok(get_success_response(json_str))
+            Ok(process_success_response(json_str, TransactionType::Swap))
         }
-        Err(err) => {
-            Ok(get_failed_response(err.to_string(), "Failed"))
-        }
+        Err(err) => Ok(process_failed_response(
+            err.to_string(),
+            "Failed",
+            TransactionType::Swap,
+        )),
     }
 }

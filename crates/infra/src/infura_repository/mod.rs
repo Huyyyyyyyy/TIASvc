@@ -391,7 +391,7 @@ impl Web3Repository for InfuraRepository {
         // Instead, send the transaction and return the transaction hash.
         let pending_swap_tx = swap_tx.send().await?;
         let tx_hash = format!("{:?}", pending_swap_tx.tx_hash());
-
+        
         Ok(tx_hash)
     }
 }
