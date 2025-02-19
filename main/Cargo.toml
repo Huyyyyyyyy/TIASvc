@@ -6,6 +6,10 @@ edition = "2021"
 [dependencies]
 framework = { path = "../crates/framework" }
 infra = { path = "../crates/infra" }
-rocket = "0.5.1"
-dotenv = "0.15.0"
-lambda_http = "0.14.0"
+rocket = { version = "0.5.1", default-features = false }
+dotenv = { version = "0.15.0", default-features = false }
+lambda_http = { version = "0.14.0", default-features = false, features = [
+    "apigw_rest",
+    "apigw_http",
+    "alb",
+] }
