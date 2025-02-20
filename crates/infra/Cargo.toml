@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-uuid = { version = "1.12.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.13.2", default-features = false, features = ["v4"] }
 reqwest = { version = "0.12.12", default-features = false, features = [
     "json",
     "rustls-tls",
@@ -22,3 +22,11 @@ hex = { version = "0.4", default-features = false }
 tokio = { version = "1.28.2", default-features = false }
 chrono = { version = "0.4.39", default-features = false, features = ["now"] }
 base64 = { version = "0.22.1", default-features = false }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-native-tls",
+    "postgres",
+    "derive",
+    "json",
+    "uuid",
+] }
