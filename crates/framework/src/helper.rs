@@ -64,7 +64,6 @@ pub async fn process_success_response(
         .await
         .unwrap();
     let height = chain_service.submit(&[blob]).await.unwrap();
-    println!("get height {:?}", height);
     //get again to check
     //store it in database for faster retrieving
 

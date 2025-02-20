@@ -4,11 +4,11 @@ use serde_json::Value;
 use std::sync::Arc;
 
 pub struct ChainService<B, C> {
-    pub repository: Arc<dyn ChainRepository<B, C>>,
+    pub repository: Arc<dyn ChainRepository<B, C> + Send + Sync>,
 }
 
 impl<B, C> ChainService<B, C> {
-    pub fn new(repository: Arc<dyn ChainRepository<B, C>>) -> Self {
+    pub fn new(repository: Arc<dyn ChainRepository<B, C> + Send + Sync>) -> Self {
         Self { repository }
     }
 
