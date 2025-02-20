@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-uuid = { version = "1.12.1", features = ["v4"] }
+uuid = { version = "1.12.1", default-features = false, features = ["v4"] }
 reqwest = { version = "0.12.12", default-features = false, features = [
     "json",
     "rustls-tls",
@@ -15,13 +15,10 @@ async-trait = { version = "0.1.86", default-features = false }
 domain = { path = "../domain" }
 celestia-types = { version = "0.10.0", default-features = false }
 celestia-rpc = { version = "0.9.0", default-features = false }
-jsonrpsee = { version = "0.24.2", features = [
-    "client-core",
-    "macros",
-    "http-client",
-    "ws-client",
-] }
 ethers = { version = "2.0", default-features = false, features = ["rustls"] }
 eyre = { version = "0.6.8", default-features = false }
 anyhow = { version = "1.0.95", default-features = false }
 hex = { version = "0.4", default-features = false }
+tokio = { version = "1.28.2", default-features = false }
+chrono = { version = "0.4.39", default-features = false, features = ["now"] }
+base64 = { version = "0.22.1", default-features = false }

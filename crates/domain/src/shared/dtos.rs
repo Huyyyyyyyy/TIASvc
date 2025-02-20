@@ -2,10 +2,35 @@ use rocket::serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub enum TransactionType {
+    Swap,
+    FiatTransfer,
+    CryptoTransfer,
+}
+
+impl TransactionType {
+    pub fn map_tx_type(&self) -> String {
+        match self {
+            TransactionType::CryptoTransfer => "CryptoTransfer".to_string(),
+            TransactionType::FiatTransfer => "FiatTransfer".to_string(),
+            TransactionType::Swap => "Swap".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct GeneralResponseDTO {
     pub status: i32,
     pub message: String,
+    pub data: Value,
+}
+
+//Celestia general reponse
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct CelestiaSubmitModel {
+    pub tx_type: String,
     pub data: Value,
 }
 
@@ -18,10 +43,12 @@ pub struct FiatTransactionRequestDTO {
     pub destination_address: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct FiatTransactionResponseDTO {
-    pub pakage: String,
+    pub receipient_address: String,
+    pub amount: String,
+    pub timestamp: String,
 }
 
 //Crypto transaction
@@ -34,10 +61,14 @@ pub struct CryptoTransactionRequestDTO {
     pub chain: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct CryptoTransactionResponseDTO {
     pub transaction_hash: String,
+    pub sender_address: String,
+    pub receipient_address: String,
+    pub amount: String,
+    pub timestamp: String,
 }
 
 //Crypto Balance transaction
@@ -85,8 +116,13 @@ pub struct CryptoSwapRequestDTO {
     pub signer_private_key: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct CryptoSwapResponseDTO {
     pub transaction_hash: String,
+    pub address: String,
+    pub amount_in: String,
+    pub from_token: String,
+    pub to_token: String,
+    pub timestamp: String,
 }
