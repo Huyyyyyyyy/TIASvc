@@ -1,5 +1,10 @@
+use anyhow::Result;
 use async_trait::async_trait;
-use domain::repository::payment_repository::PaymentRepository;
+use chrono::Utc;
+use domain::{
+    repository::payment_repository::PaymentRepository, shared::dtos::FiatTransactionResponseDTO,
+};
+use ethers::types::transaction::response;
 use request_model::{Amount, Destination, Source, TransferRequest};
 use reqwest::{header::CONTENT_TYPE, Client, Error, RequestBuilder, Response};
 use serde::Serialize;
@@ -71,7 +76,7 @@ impl PaymentRepository for CircleRepository {
         amount: &str,
         chain: &str,
         destination_address: &str,
-    ) -> Result<String, String> {
+    ) -> Result<FiatTransactionResponseDTO> {
         let endpoint = format!("{}/v1/transfers", self.mint_base_url);
         let json_wallet = self
             .get_master_wallet_id()
@@ -103,6 +108,11 @@ impl PaymentRepository for CircleRepository {
         let response = self
             .send_request(Some(payload), &endpoint, RequestMethod::POST)
             .await;
-        Ok(response.unwrap().text().await.unwrap())
+        let result = FiatTransactionResponseDTO {
+            receipient_address: destination_address.to_string(),
+            amount: amount.to_string(),
+            timestamp: Utc::now().timestamp().to_string(),
+        };
+        Ok(result)
     }
 }

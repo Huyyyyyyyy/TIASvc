@@ -1,10 +1,14 @@
 use crate::contract_abi::{CT_LINK, CT_ROUTER02, CT_USDC, CT_WETH};
 use anyhow::{anyhow, Ok, Result};
 use async_trait::async_trait;
-use domain::repository::web3_repository::Web3Repository;
+use chrono::Utc;
+use domain::{
+    repository::web3_repository::Web3Repository,
+    shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO},
+};
 use ethers::{
     abi::Abi,
-    core::rand::thread_rng,
+    core::{k256::pkcs8::der::asn1::UtcTime, rand::thread_rng},
     prelude::*,
     utils::{self, parse_units},
 };
@@ -13,6 +17,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
     pub base_url: String,
@@ -204,13 +209,14 @@ impl Web3Repository for InfuraRepository {
     async fn transfer_token(
         &self,
         sender_private_key: &str,
-        recipient_address: &str,
+        receipient_address: &str,
         amount: &str,
         chain: &str,
-    ) -> Result<String> {
+    ) -> Result<CryptoTransactionResponseDTO> {
         let contract_abi = ContractABI::map_token_contract(chain);
         let client = self.establish_signer_wallet(sender_private_key).await?;
-        let recipient = recipient_address
+        let signer_address = format!("{:?}", client.address());
+        let recipient = receipient_address
             .parse::<Address>()
             .map_err(|e| anyhow!("Invalid recipient address: {}", e))?;
 
@@ -241,7 +247,15 @@ impl Web3Repository for InfuraRepository {
                 format!("{:?}", receipt.transaction_hash)
             }
         };
-        Ok(rs)
+
+        let result = CryptoTransactionResponseDTO {
+            transaction_hash: rs,
+            sender_address: signer_address,
+            receipient_address: receipient_address.to_string(),
+            amount: amount.to_string(),
+            timestamp: Utc::now().timestamp().to_string(),
+        };
+        Ok(result)
     }
 
     async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
@@ -293,20 +307,19 @@ impl Web3Repository for InfuraRepository {
         to_token: &str,
         amount: &str,
         signer_private_key: &str,
-    ) -> Result<String> {
-        //establish the client provider
+    ) -> Result<CryptoSwapResponseDTO> {
+        // Establish client and signer
         let client = self.establish_signer_wallet(signer_private_key).await?;
         let signer_address = client.address();
 
-        //establish contract of uniswap
+        // Get router contract
         let contract_router = self
             .establish_contract_router(client.clone(), ContractABI::ROUTER02)
             .await?;
-        let router20_address = contract_router.address();
+        let router_address = contract_router.address();
 
-        //get from contract
-        let mut from_detect = ContractABI::map_token_contract(&from_token);
-        //need to map again because ETH use WETH to swap
+        // Map from-token; if it's ETH, use WETH
+        let mut from_detect = ContractABI::map_token_contract(from_token);
         if from_detect == ContractABI::ETH {
             from_detect = ContractABI::WETH;
         }
@@ -315,76 +328,91 @@ impl Web3Repository for InfuraRepository {
             .await?;
         let from_address = from_contract.address();
 
-        //get destination contract
-        let mut destination_detect = ContractABI::map_token_contract(&to_token);
-        //need to map again because ETH use WETH to swap
+        // Map destination token; if it's ETH, use WETH
+        let mut destination_detect = ContractABI::map_token_contract(to_token);
         if destination_detect == ContractABI::ETH {
             destination_detect = ContractABI::WETH;
         }
         let destination_address =
             ContractABI::get_contract_address(&destination_detect).parse::<Address>()?;
 
-        //process the amount
+        // Process the amount
+        // Get decimals from the from-contract
         let decimals: u8 = from_contract.method("decimals", ())?.call().await?;
-        let approval_amount = parse_units(amount, decimals as i32)?.to_string();
+        // Parse the input amount into base units; for example, "10" USDC will be 10*10^6
+        let approval_amount: U256 =
+            U256::from_dec_str(&parse_units(amount, decimals as i32)?.to_string()).unwrap();
+
+        // Get expected output using getAmountsOut.
+        // (Make sure the token order is correct: for swapping ETH→USDC, the path is [WETH, USDC])
         let range_expected: Vec<U256> = contract_router
             .method(
                 "getAmountsOut",
-                (
-                    U256::from_dec_str(&approval_amount).unwrap(),
-                    vec![from_address, destination_address],
-                ),
+                (approval_amount, vec![from_address, destination_address]),
             )?
             .call()
             .await?;
         let expected_amount = range_expected
             .last()
             .ok_or_else(|| anyhow!("No expected amount"))?;
+        // Apply a 5% slippage tolerance
         let amount_out_min = expected_amount * U256::from(95) / U256::from(100);
 
-        //send request to usdc contract for approve amount
-        let approve_tx = from_contract.method::<_, H256>(
-            "approve",
-            (
-                router20_address,
-                U256::from_dec_str(&approval_amount).unwrap(),
-            ),
-        )?;
+        // If swapping tokens , approve the router to spend your tokens.
+        let approve_tx =
+            from_contract.method::<_, H256>("approve", (router_address, approval_amount))?;
         let pending_approve_tx = approve_tx.send().await?;
-        pending_approve_tx.await?;
+        pending_approve_tx.await?; // Wait for approval to be mined
 
-        //timestamp deadline
-        let valid_time = self.get_valid_timestamp(300000);
-        let u256_timestamp = U256::from_dec_str(&valid_time.to_string()).unwrap();
+        // Set a deadline timestamp
+        let valid_time = self.get_valid_timestamp(300_000);
+        let u256_timestamp = U256::from(valid_time);
 
-        //send request to swap token
-        let method = SwapMethod::map_swap_method(from_detect, destination_detect)?;
-        let swap_tx = match method {
-            SwapMethod::SwapExactETHForTokens => contract_router
-                .method::<_, H256>(
-                    &SwapMethod::to_string(&method),
+        // Determine which swap method to use
+        let swap_method = SwapMethod::map_swap_method(from_detect, destination_detect)?;
+
+        // Build the swap transaction.
+        // For ETH-to-token swap (swapExactETHForTokens) -> need attach the ETH value.
+        let swap_tx = match swap_method {
+            SwapMethod::SwapExactETHForTokens => {
+                contract_router
+                    .method::<_, H256>(
+                        &SwapMethod::to_string(&swap_method),
+                        (
+                            amount_out_min,
+                            vec![from_address, destination_address],
+                            signer_address,
+                            u256_timestamp,
+                        ),
+                    )?
+                    .value(approval_amount) // Here, approval_amount is the ETH amount in wei
+            }
+            _ => {
+                contract_router.method::<_, H256>(
+                    &SwapMethod::to_string(&swap_method),
                     (
-                        amount_out_min,
+                        approval_amount, // amountIn for token-to-ETH or token-to-token swaps
+                        amount_out_min,  // minimum acceptable output
                         vec![from_address, destination_address],
                         signer_address,
                         u256_timestamp,
                     ),
                 )?
-                .value(U256::from_dec_str(&approval_amount).unwrap()),
-            _ => contract_router.method::<_, H256>(
-                &SwapMethod::to_string(&method),
-                (
-                    U256::from_dec_str(&approval_amount).unwrap(),
-                    amount_out_min,
-                    vec![from_address, destination_address],
-                    signer_address,
-                    u256_timestamp,
-                ),
-            )?,
+            }
         };
+
+        // IMPORTANT: To avoid Lambda timeout (30s), don't wait for full transaction receipt.
+        // Instead, send the transaction and return the transaction hash.
         let pending_swap_tx = swap_tx.send().await?;
-        let receipt_swap_tx = pending_swap_tx.await.unwrap().unwrap();
-        let rs = format!("{:?}", receipt_swap_tx.transaction_hash);
-        Ok(rs)
+        let tx_hash = format!("{:?}", pending_swap_tx.tx_hash());
+        let response_dto = CryptoSwapResponseDTO {
+            transaction_hash: tx_hash,
+            address: format!("{:?}", signer_address),
+            amount_in: amount.to_string(),
+            from_token: from_token.to_string(),
+            to_token: to_token.to_string(),
+            timestamp: Utc::now().timestamp().to_string(),
+        };
+        Ok(response_dto)
     }
 }
