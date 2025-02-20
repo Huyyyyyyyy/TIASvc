@@ -1,21 +1,21 @@
-use crate::{
-    dto::{
-        CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
-        CryptoSwapResponseDTO, CryptoTransactionRequestDTO, CryptoTransactionResponseDTO,
-        CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO, CryptoWalletResponseDTO,
-        FiatTransactionRequestDTO, FiatTransactionResponseDTO, TransactionType,
-    },
-    helper::{
-        get_failed_response, get_success_response, process_failed_response,
-        process_success_response,
-    },
+use crate::helper::{
+    get_failed_response, get_success_response, process_failed_response, process_success_response,
 };
 use app::{
     self,
     usecase::{payment_service::PaymentService, web3_service::Web3Service},
 };
+use domain::{
+    self,
+    shared::dtos::{
+        CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
+        CryptoTransactionRequestDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
+        CryptoWalletResponseDTO, FiatTransactionRequestDTO, TransactionType,
+    },
+};
 use infra::{self, circle_repository::CircleRepository, infura_repository::InfuraRepository};
 use lambda_http::{aws_lambda_events::encodings::Error, Body, Request, Response};
+use rocket::serde::json::to_value;
 use serde_json::to_string;
 use std::sync::Arc;
 
@@ -37,15 +37,17 @@ pub async fn fiat_transaction(event: Request) -> Result<Response<Body>, Error> {
         .await
     {
         Ok(response) => {
-            let rs = FiatTransactionResponseDTO { pakage: response };
-            let json_str = to_string(&rs).unwrap();
-            Ok(process_success_response(
-                json_str,
+            let json_value = to_value(response.clone()).unwrap();
+            let final_response = process_success_response(
+                json_value,
                 TransactionType::FiatTransfer,
-            ))
+                &response.clone().receipient_address,
+            )
+            .await;
+            Ok(final_response)
         }
         Err(error) => Ok(process_failed_response(
-            error,
+            error.to_string(),
             "Failed",
             TransactionType::FiatTransfer,
         )),
@@ -71,14 +73,14 @@ pub async fn crypto_transaction(event: Request) -> Result<Response<Body>, Error>
         .await
     {
         Ok(response) => {
-            let rs = CryptoTransactionResponseDTO {
-                transaction_hash: response,
-            };
-            let json_str = to_string(&rs).unwrap();
-            Ok(process_success_response(
-                json_str,
+            let json_value = to_value(response.clone()).unwrap();
+            let final_response = process_success_response(
+                json_value,
                 TransactionType::CryptoTransfer,
-            ))
+                &response.clone().sender_address,
+            )
+            .await;
+            Ok(final_response)
         }
         Err(error) => Ok(process_failed_response(
             error.to_string(),
@@ -172,11 +174,14 @@ pub async fn crypto_swap(event: Request) -> Result<Response<Body>, Error> {
         .await
     {
         Ok(response) => {
-            let rs = CryptoSwapResponseDTO {
-                transaction_hash: response,
-            };
-            let json_str = to_string(&rs).unwrap();
-            Ok(process_success_response(json_str, TransactionType::Swap))
+            let json_value = serde_json::to_value(response.clone())?;
+            let final_response = process_success_response(
+                json_value,
+                TransactionType::Swap,
+                &response.clone().address,
+            )
+            .await;
+            Ok(final_response)
         }
         Err(err) => Ok(process_failed_response(
             err.to_string(),

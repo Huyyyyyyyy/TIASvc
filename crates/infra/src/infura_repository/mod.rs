@@ -1,10 +1,14 @@
 use crate::contract_abi::{CT_LINK, CT_ROUTER02, CT_USDC, CT_WETH};
 use anyhow::{anyhow, Ok, Result};
 use async_trait::async_trait;
-use domain::repository::web3_repository::Web3Repository;
+use chrono::Utc;
+use domain::{
+    repository::web3_repository::Web3Repository,
+    shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO},
+};
 use ethers::{
     abi::Abi,
-    core::rand::thread_rng,
+    core::{k256::pkcs8::der::asn1::UtcTime, rand::thread_rng},
     prelude::*,
     utils::{self, parse_units},
 };
@@ -13,6 +17,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
     pub base_url: String,
@@ -204,13 +209,14 @@ impl Web3Repository for InfuraRepository {
     async fn transfer_token(
         &self,
         sender_private_key: &str,
-        recipient_address: &str,
+        receipient_address: &str,
         amount: &str,
         chain: &str,
-    ) -> Result<String> {
+    ) -> Result<CryptoTransactionResponseDTO> {
         let contract_abi = ContractABI::map_token_contract(chain);
         let client = self.establish_signer_wallet(sender_private_key).await?;
-        let recipient = recipient_address
+        let signer_address = format!("{:?}", client.address());
+        let recipient = receipient_address
             .parse::<Address>()
             .map_err(|e| anyhow!("Invalid recipient address: {}", e))?;
 
@@ -241,7 +247,15 @@ impl Web3Repository for InfuraRepository {
                 format!("{:?}", receipt.transaction_hash)
             }
         };
-        Ok(rs)
+
+        let result = CryptoTransactionResponseDTO {
+            transaction_hash: rs,
+            sender_address: signer_address,
+            receipient_address: receipient_address.to_string(),
+            amount: amount.to_string(),
+            timestamp: Utc::now().timestamp().to_string(),
+        };
+        Ok(result)
     }
 
     async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
@@ -293,7 +307,7 @@ impl Web3Repository for InfuraRepository {
         to_token: &str,
         amount: &str,
         signer_private_key: &str,
-    ) -> Result<String> {
+    ) -> Result<CryptoSwapResponseDTO> {
         // Establish client and signer
         let client = self.establish_signer_wallet(signer_private_key).await?;
         let signer_address = client.address();
@@ -391,7 +405,14 @@ impl Web3Repository for InfuraRepository {
         // Instead, send the transaction and return the transaction hash.
         let pending_swap_tx = swap_tx.send().await?;
         let tx_hash = format!("{:?}", pending_swap_tx.tx_hash());
-        
-        Ok(tx_hash)
+        let response_dto = CryptoSwapResponseDTO {
+            transaction_hash: tx_hash,
+            address: format!("{:?}", signer_address),
+            amount_in: amount.to_string(),
+            from_token: from_token.to_string(),
+            to_token: to_token.to_string(),
+            timestamp: Utc::now().timestamp().to_string(),
+        };
+        Ok(response_dto)
     }
 }

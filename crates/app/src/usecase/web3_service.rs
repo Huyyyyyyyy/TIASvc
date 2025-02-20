@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use domain::repository::web3_repository::Web3Repository;
+use domain::{
+    repository::web3_repository::Web3Repository,
+    shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO},
+};
 
 pub struct Web3Service {
     repository: Arc<dyn Web3Repository>,
@@ -18,7 +21,7 @@ impl Web3Service {
         recipient_address: &str,
         amount: &str,
         chain: &str,
-    ) -> Result<String> {
+    ) -> Result<CryptoTransactionResponseDTO> {
         self.repository
             .transfer_token(sender_private_key, recipient_address, amount, chain)
             .await
@@ -42,7 +45,7 @@ impl Web3Service {
         to_token: &str,
         amount: &str,
         signer_private_key: &str,
-    ) -> Result<String> {
+    ) -> Result<CryptoSwapResponseDTO> {
         self.repository
             .swap(from_token, to_token, amount, signer_private_key)
             .await

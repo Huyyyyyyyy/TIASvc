@@ -1,4 +1,7 @@
-use domain::repository::payment_repository::PaymentRepository;
+use anyhow::Result;
+use domain::{
+    repository::payment_repository::PaymentRepository, shared::dtos::FiatTransactionResponseDTO,
+};
 use std::sync::Arc;
 
 pub struct PaymentService {
@@ -15,7 +18,7 @@ impl PaymentService {
         amount: &str,
         chain: &str,
         destination_address: &str,
-    ) -> Result<String, String> {
+    ) -> Result<FiatTransactionResponseDTO> {
         self.repository
             .process_fiat(amount, chain, destination_address)
             .await
