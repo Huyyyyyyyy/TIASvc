@@ -8,7 +8,7 @@ use domain::{
 };
 use ethers::{
     abi::Abi,
-    core::{k256::pkcs8::der::asn1::UtcTime, rand::thread_rng},
+    core::rand::thread_rng,
     prelude::*,
     utils::{self, parse_units},
 };
