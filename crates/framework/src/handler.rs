@@ -1,6 +1,6 @@
 use crate::route::{
     crypto_balance, crypto_swap, crypto_transaction, crypto_wallet, crypto_wallet_creation,
-    fiat_transaction,
+    fiat_transaction, transaction_history,
 };
 use lambda_http::{Body, Error, IntoResponse, Request, Response};
 
@@ -11,6 +11,7 @@ pub async fn lambda_handler(event: Request) -> Result<impl IntoResponse, Error> 
         //GET
         ("GET", "/crypto/balance") => crypto_balance(event).await,
         ("GET", "/crypto/wallet") => crypto_wallet(event).await,
+        ("GET", "/history/transaction") => transaction_history(event).await,
 
         //POST
         ("POST", "/fiat/transaction") => fiat_transaction(event).await,

@@ -126,3 +126,17 @@ pub struct CryptoSwapResponseDTO {
     pub to_token: String,
     pub timestamp: String,
 }
+
+//Transaction history
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct TransactionHistoryRequestDTO {
+    pub address: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct TransactionHistoryResponseDTO {
+    pub tx_type: String,
+    pub data: Value,
+}
