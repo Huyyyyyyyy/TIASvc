@@ -24,7 +24,7 @@ chrono = { version = "0.4.39", default-features = false, features = ["now"] }
 base64 = { version = "0.22.1", default-features = false }
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
-    "tls-native-tls",
+    "tls-rustls",
     "postgres",
     "derive",
     "json",
