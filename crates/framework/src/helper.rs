@@ -1,6 +1,6 @@
-use app::usecase::chain_service::ChainService;
+use app::usecase::{chain_service::ChainService, database_service::DatabaseService};
 use domain::shared::dtos::{CelestiaSubmitModel, GeneralResponseDTO, TransactionType};
-use infra::celestia_repository::CelestiaRepository;
+use infra::{celestia_repository::CelestiaRepository, postgres_repository::PostgresRepository};
 use lambda_http::{Body, Response};
 use serde_json::Value;
 use std::sync::Arc;
@@ -66,6 +66,12 @@ pub async fn process_success_response(
     let height = chain_service.submit(&[blob]).await.unwrap();
     //get again to check
     //store it in database for faster retrieving
+    let db_repository = Arc::new(PostgresRepository::new().await);
+    let db_service = DatabaseService::new(db_repository.clone());
+    let rs = db_service
+        .add_new_transaction(height.to_string().as_str(), user_address)
+        .await
+        .unwrap();
 
     Response::builder()
         .status(200)
