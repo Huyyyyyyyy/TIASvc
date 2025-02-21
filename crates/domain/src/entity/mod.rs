@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 
-#[derive(Debug, Clone, FromRow, PartialEq, Eq)]
+#[derive(Debug, Clone, FromRow, PartialEq, Eq, Serialize, Deserialize)]
 pub struct W3Transaction {
     pub w3_height: String,
     pub w3_address: String,

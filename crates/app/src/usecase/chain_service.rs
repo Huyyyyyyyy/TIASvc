@@ -1,5 +1,7 @@
 use anyhow::Result;
-use domain::repository::chain_repository::ChainRepository;
+use domain::{
+    repository::chain_repository::ChainRepository, shared::dtos::TransactionHistoryResponseDTO,
+};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -20,7 +22,15 @@ impl<B, C> ChainService<B, C> {
         self.repository.build_blob(namespace, data).await
     }
 
-    pub async fn get_all(&self, namespace: &[C], height: u64) -> Result<()> {
+    pub async fn get_all(
+        &self,
+        namespace: &[C],
+        height: u64,
+    ) -> Result<Vec<TransactionHistoryResponseDTO>> {
         self.repository.get_all(namespace, height).await
+    }
+
+    fn revert_blob(&self, blob: &B) -> Result<TransactionHistoryResponseDTO> {
+        self.repository.revert_blob(blob)
     }
 }

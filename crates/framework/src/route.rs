@@ -3,17 +3,24 @@ use crate::helper::{
 };
 use app::{
     self,
-    usecase::{payment_service::PaymentService, web3_service::Web3Service},
+    usecase::{
+        chain_service::ChainService, database_service::DatabaseService,
+        payment_service::PaymentService, web3_service::Web3Service,
+    },
 };
 use domain::{
     self,
     shared::dtos::{
         CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
         CryptoTransactionRequestDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
-        CryptoWalletResponseDTO, FiatTransactionRequestDTO, TransactionType,
+        CryptoWalletResponseDTO, FiatTransactionRequestDTO, TransactionHistoryRequestDTO,
+        TransactionHistoryResponseDTO, TransactionType,
     },
 };
-use infra::{self, circle_repository::CircleRepository, infura_repository::InfuraRepository};
+use infra::{
+    self, celestia_repository::CelestiaRepository, circle_repository::CircleRepository,
+    infura_repository::InfuraRepository, postgres_repository::PostgresRepository,
+};
 use lambda_http::{aws_lambda_events::encodings::Error, Body, Request, Response};
 use rocket::serde::json::to_value;
 use serde_json::to_string;
@@ -189,4 +196,36 @@ pub async fn crypto_swap(event: Request) -> Result<Response<Body>, Error> {
             TransactionType::Swap,
         )),
     }
+}
+
+//user can get their transaction history
+pub async fn transaction_history(event: Request) -> Result<Response<Body>, Error> {
+    let db_repository = Arc::new(PostgresRepository::new().await);
+    let db_service = DatabaseService::new(db_repository.clone());
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let transaction_history_request: TransactionHistoryRequestDTO =
+        serde_json::from_str(&body_str)?;
+
+    let transaction_result = db_service
+        .fetch_related_transactions(&transaction_history_request.address.to_lowercase())
+        .await?;
+
+    let chain_repository = Arc::new(CelestiaRepository::new().await);
+    let chain_service = ChainService::new(chain_repository.clone());
+
+    let mut transaction_from_node = Vec::<TransactionHistoryResponseDTO>::new();
+    for tx in transaction_result {
+        println!("height : {:?}, address : {:?}", tx.w3_height, tx.w3_address);
+        let namespace = chain_repository
+            .clone()
+            .address_to_namespace(&tx.w3_address)?;
+        let blobs = chain_service
+            .get_all(&[namespace], tx.w3_height.parse::<u64>().unwrap())
+            .await?;
+        transaction_from_node.append(&mut blobs.clone());
+    }
+    let json_str = to_string(&transaction_from_node).unwrap();
+    Ok(get_success_response(json_str))
 }
