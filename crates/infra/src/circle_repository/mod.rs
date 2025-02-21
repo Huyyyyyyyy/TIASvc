@@ -100,7 +100,7 @@ impl PaymentRepository for CircleRepository {
             destination: Destination {
                 destination_type: "blockchain".to_string(),
                 chain: chain.to_string(),
-                address: destination_address.to_string(),
+                address: destination_address.to_string().to_lowercase(),
             },
             idempotency_key: Uuid::new_v4().to_string(),
         };

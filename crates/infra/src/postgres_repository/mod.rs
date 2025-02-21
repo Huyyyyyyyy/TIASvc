@@ -53,7 +53,6 @@ impl DatabaseRepository for PostgresRepository {
             format!("insert into w3_transaction (w3_height, w3_address) values ($1, $2)");
         let query_buidler = sqlx::query(&query_str).bind(height).bind(address);
         let rs = self.raw_update(query_buidler).await?;
-        println!("updated new transaction : {:?}", height);
         Ok(())
     }
 }
