@@ -13,8 +13,9 @@ use domain::{
     shared::dtos::{
         CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
         CryptoTransactionRequestDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
-        CryptoWalletResponseDTO, FiatTransactionRequestDTO, TransactionHistoryRequestDTO,
-        TransactionHistoryResponseDTO, TransactionType,
+        CryptoWalletResponseDTO, FiatTransactionRequestDTO, SendRawTransactionRequestDTO,
+        SendRawTransactionResponseDTO, TransactionHistoryRequestDTO, TransactionHistoryResponseDTO,
+        TransactionType,
     },
 };
 use infra::{
@@ -228,4 +229,26 @@ pub async fn transaction_history(event: Request) -> Result<Response<Body>, Error
     }
     let json_str = to_string(&transaction_from_node).unwrap();
     Ok(get_success_response(json_str))
+}
+
+//client send the raw transaction for us to process
+pub async fn send_raw_transaction(event: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let send_raw_transaction_request: SendRawTransactionRequestDTO =
+        serde_json::from_str(&body_str)?;
+
+    match web3_service
+        .send_raw_transaction(&send_raw_transaction_request.raw_transaction)
+        .await
+    {
+        Ok(response) => {
+            let json_str = to_string(&response).unwrap();
+            Ok(get_success_response(json_str))
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
 }

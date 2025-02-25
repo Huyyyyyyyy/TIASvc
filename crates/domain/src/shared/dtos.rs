@@ -140,3 +140,18 @@ pub struct TransactionHistoryResponseDTO {
     pub tx_type: String,
     pub data: Value,
 }
+
+
+
+//Send raw transaction
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct SendRawTransactionRequestDTO {
+    pub raw_transaction: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct SendRawTransactionResponseDTO {
+    pub tx_hash : String
+}

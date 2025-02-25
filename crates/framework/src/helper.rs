@@ -14,7 +14,8 @@ pub fn get_success_response(data: String) -> Response<Body> {
 
     Response::builder()
         .status(200)
-        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type")
         .body(Body::Text(
             serde_json::to_string(&general_response).unwrap(),
         ))
@@ -75,7 +76,8 @@ pub async fn process_success_response(
 
     Response::builder()
         .status(200)
-        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type")
         .body(Body::Text(
             serde_json::to_string(&general_response).unwrap(),
         ))
