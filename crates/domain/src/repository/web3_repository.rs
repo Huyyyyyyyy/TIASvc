@@ -1,7 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO, SendRawTransactionResponseDTO};
+use crate::shared::dtos::{
+    CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoTransactionResponseDTO,
+};
 
 #[async_trait]
 pub trait Web3Repository: Send + Sync {
@@ -13,7 +15,10 @@ pub trait Web3Repository: Send + Sync {
         chain: &str,
     ) -> Result<CryptoTransactionResponseDTO>;
 
-    async fn send_raw_transaction(&self, raw_transaction: &str) -> Result<SendRawTransactionResponseDTO>;
+    async fn process_crypto_transaction(
+        &self,
+        tx_hash: &str,
+    ) -> Result<ProcessCryptoTransactionResponseDTO>;
 
     async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String>;
 

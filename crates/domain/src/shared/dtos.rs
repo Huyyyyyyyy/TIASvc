@@ -146,12 +146,12 @@ pub struct TransactionHistoryResponseDTO {
 //Send raw transaction
 #[derive(Debug, Deserialize)]
 #[serde(crate = "rocket::serde")]
-pub struct SendRawTransactionRequestDTO {
-    pub raw_transaction: String,
+pub struct ProcessCryptoTransactionRequestDTO {
+    pub tx_hash: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
-pub struct SendRawTransactionResponseDTO {
+pub struct ProcessCryptoTransactionResponseDTO {
     pub tx_hash : String
 }

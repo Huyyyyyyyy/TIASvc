@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use domain::{
     repository::web3_repository::Web3Repository,
-    shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO, SendRawTransactionResponseDTO},
+    shared::dtos::{
+        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoTransactionResponseDTO,
+    },
 };
 
 pub struct Web3Service {
@@ -27,11 +29,11 @@ impl Web3Service {
             .await
     }
 
-    pub async fn send_raw_transaction(
+    pub async fn process_crypto_transaction(
         &self,
-        raw_transaction: &str,
-    ) -> Result<SendRawTransactionResponseDTO> {
-        self.repository.send_raw_transaction(raw_transaction).await
+        tx_hash: &str,
+    ) -> Result<ProcessCryptoTransactionResponseDTO> {
+        self.repository.process_crypto_transaction(tx_hash).await
     }
 
     pub async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {

@@ -1,11 +1,11 @@
 use crate::contract_abi::{CT_LINK, CT_ROUTER02, CT_USDC, CT_WETH};
-use anyhow::{anyhow, Ok as x, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use domain::{
     repository::web3_repository::Web3Repository,
     shared::dtos::{
-        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, SendRawTransactionResponseDTO,
+        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoTransactionResponseDTO,
     },
 };
 use ethers::{
@@ -20,8 +20,9 @@ use std::{
     ops::Deref,
     str::FromStr,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::time::sleep;
 
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
@@ -421,45 +422,26 @@ impl Web3Repository for InfuraRepository {
         Ok(response_dto)
     }
 
-    async fn send_raw_transaction(
+    async fn process_crypto_transaction(
         &self,
-        raw_transaction: &str,
-    ) -> Result<SendRawTransactionResponseDTO> {
-        let raw_tx_bytes: Bytes = Bytes::from_str(raw_transaction).unwrap();
-        println!("Transaction Raw: {}", raw_transaction);
-
-        // Send the raw transaction
-        let pending_tx = self
-            .provider
-            .send_raw_transaction(raw_tx_bytes.into())
-            .await
-            .unwrap();
-        let tx_hash = format!("{:?}", pending_tx.tx_hash());
-        println!("Transaction Hash: {}", tx_hash);
-
-        // Wait for the transaction to be confirmed
-        let receipt_result = pending_tx.await;
-
-        match receipt_result {
-            Ok(receipt_tx) => {
-                println!("Transaction confirmed: {:?}", receipt_tx);
-            }
-            Err(e) => {
-                eprintln!("Transaction failed: {:?}", e);
-
-                if let Some(revert_data) = ethers::providers::RpcError::as_error_response(&e) {
-                    let data_bytes = revert_data.data.as_ref().and_then(|d| d.as_str()).unwrap();
-                    let decoded_bytes =
-                        hex::decode(data_bytes.strip_prefix("0x").unwrap_or(data_bytes)).unwrap();
-
-                    let tokens = decode(&[ParamType::String], &decoded_bytes[4..]).unwrap();
-                    let x = tokens.get(0).unwrap().to_string();
-                    println!("error : {:?}", x);
-                }
-            }
+        tx_hash: &str,
+    ) -> Result<ProcessCryptoTransactionResponseDTO> {
+        // ✅ Poll for receipt (10 retries, every 3 seconds)
+        let hash: TxHash = tx_hash.parse().unwrap();
+        let mut result = ProcessCryptoTransactionResponseDTO {
+            tx_hash: String::from(""),
         };
+        for _ in 0..10 {
+            if let Ok(Some(receipt)) = self.provider.get_transaction_receipt(hash).await {
+                println!("Transaction confirmed: {:?}", receipt);
+                result.tx_hash = format!("{:?}", receipt.transaction_hash.to_string());
+                return Ok(result);
+            }
+            println!("Waiting for confirmation...");
+            sleep(Duration::from_secs(3)).await;
+        }
 
-        // Return transaction hash
-        Ok(SendRawTransactionResponseDTO { tx_hash })
+        println!("Transaction not confirmed after retries.");
+        Ok(result)
     }
 }

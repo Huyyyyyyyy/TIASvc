@@ -1,6 +1,6 @@
 use crate::route::{
     crypto_balance, crypto_swap, crypto_transaction, crypto_wallet, crypto_wallet_creation,
-    fiat_transaction, send_raw_transaction, transaction_history,
+    fiat_transaction, process_crypto_transaction, transaction_history,
 };
 use lambda_http::{Body, Error, IntoResponse, Request, Response};
 
@@ -16,7 +16,7 @@ pub async fn lambda_handler(event: Request) -> Result<impl IntoResponse, Error> 
         ("POST", "/crypto/transaction") => crypto_transaction(event).await,
         ("POST", "/crypto/creation/wallet") => crypto_wallet_creation(event).await,
         ("POST", "/crypto/swap") => crypto_swap(event).await,
-        ("POST", "/service/sendRaw") => send_raw_transaction(event).await,
+        ("POST", "/crypto/process") => process_crypto_transaction(event).await,
 
         //Out of scope
         _ => Ok(Response::builder()
