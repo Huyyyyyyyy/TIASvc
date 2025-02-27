@@ -5,7 +5,8 @@ use chrono::Utc;
 use domain::{
     repository::web3_repository::Web3Repository,
     shared::dtos::{
-        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoTransactionResponseDTO,
+        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoSwapResponseDTO,
+        ProcessCryptoTransactionResponseDTO,
     },
 };
 use ethers::{
@@ -14,7 +15,7 @@ use ethers::{
     prelude::*,
     utils::{self, parse_units},
 };
-use serde_json::to_string;
+use serde_json::{to_string, Value};
 use std::{
     env,
     ops::Deref,
@@ -424,24 +425,32 @@ impl Web3Repository for InfuraRepository {
 
     async fn process_crypto_transaction(
         &self,
-        tx_hash: &str,
+        data: Value,
     ) -> Result<ProcessCryptoTransactionResponseDTO> {
         // ✅ Poll for receipt (10 retries, every 3 seconds)
-        let hash: TxHash = tx_hash.parse().unwrap();
-        let mut result = ProcessCryptoTransactionResponseDTO {
-            tx_hash: String::from(""),
-        };
+        let mut response = serde_json::from_value::<ProcessCryptoTransactionResponseDTO>(data)?;
+        let hash: TxHash = response.transaction_hash.parse().unwrap();
         for _ in 0..10 {
             if let Ok(Some(receipt)) = self.provider.get_transaction_receipt(hash).await {
-                println!("Transaction confirmed: {:?}", receipt);
-                result.tx_hash = format!("{:?}", receipt.transaction_hash.to_string());
-                return Ok(result);
+                response.transaction_hash = format!("{:?}", receipt.transaction_hash);
+                return Ok(response);
             }
-            println!("Waiting for confirmation...");
             sleep(Duration::from_secs(3)).await;
         }
+        Ok(response)
+    }
 
-        println!("Transaction not confirmed after retries.");
-        Ok(result)
+    async fn process_crypto_swap(&self, data: Value) -> Result<ProcessCryptoSwapResponseDTO> {
+        // ✅ Poll for receipt (10 retries, every 3 seconds)
+        let mut response = serde_json::from_value::<ProcessCryptoSwapResponseDTO>(data)?;
+        let hash: TxHash = response.transaction_hash.parse().unwrap();
+        for _ in 0..10 {
+            if let Ok(Some(receipt)) = self.provider.get_transaction_receipt(hash).await {
+                response.transaction_hash = format!("{:?}", receipt.transaction_hash);
+                return Ok(response);
+            }
+            sleep(Duration::from_secs(3)).await;
+        }
+        Ok(response)
     }
 }

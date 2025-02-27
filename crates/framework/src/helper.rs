@@ -59,7 +59,7 @@ pub async fn process_success_response(
     };
     let blob = chain_service
         .build_blob(
-            user_address,
+            user_address.to_lowercase().as_str(),
             serde_json::to_value(celestia_submit_model).unwrap(),
         )
         .await

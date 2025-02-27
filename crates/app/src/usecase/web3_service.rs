@@ -4,9 +4,11 @@ use anyhow::Result;
 use domain::{
     repository::web3_repository::Web3Repository,
     shared::dtos::{
-        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoTransactionResponseDTO,
+        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoSwapResponseDTO,
+        ProcessCryptoTransactionResponseDTO,
     },
 };
+use serde_json::Value;
 
 pub struct Web3Service {
     repository: Arc<dyn Web3Repository>,
@@ -31,9 +33,13 @@ impl Web3Service {
 
     pub async fn process_crypto_transaction(
         &self,
-        tx_hash: &str,
+        data: Value,
     ) -> Result<ProcessCryptoTransactionResponseDTO> {
-        self.repository.process_crypto_transaction(tx_hash).await
+        self.repository.process_crypto_transaction(data).await
+    }
+
+    pub async fn process_crypto_swap(&self, data: Value) -> Result<ProcessCryptoSwapResponseDTO> {
+        self.repository.process_crypto_swap(data).await
     }
 
     pub async fn get_balance(&self, signer_private_key: &str, chain: &str) -> Result<String> {
