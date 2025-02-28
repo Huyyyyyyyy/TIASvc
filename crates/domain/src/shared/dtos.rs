@@ -140,3 +140,41 @@ pub struct TransactionHistoryResponseDTO {
     pub tx_type: String,
     pub data: Value,
 }
+
+//process transfer transaction
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ProcessCryptoTransactionRequestDTO {
+    pub tx_type: String,
+    pub data: Value,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct ProcessCryptoTransactionResponseDTO {
+    pub transaction_hash: String,
+    pub sender_address: String,
+    pub recipient_address: String,
+    pub amount: String,
+    pub chain: String,
+    pub timestamp: String,
+}
+
+//process swap transaction
+#[derive(Debug, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ProcessCryptoSwapRequestDTO {
+    pub tx_type: String,
+    pub data: Value,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct ProcessCryptoSwapResponseDTO {
+    pub transaction_hash: String,
+    pub address: String,
+    pub amount_in: String,
+    pub from_token: String,
+    pub to_token: String,
+    pub timestamp: String,
+}

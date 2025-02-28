@@ -13,7 +13,8 @@ use domain::{
     shared::dtos::{
         CryptoBalanceRequestDTO, CryptoBalanceResponseDTO, CryptoSwapRequestDTO,
         CryptoTransactionRequestDTO, CryptoWalletCreationResponseDTO, CryptoWalletRequestDTO,
-        CryptoWalletResponseDTO, FiatTransactionRequestDTO, TransactionHistoryRequestDTO,
+        CryptoWalletResponseDTO, FiatTransactionRequestDTO, ProcessCryptoSwapRequestDTO,
+        ProcessCryptoTransactionRequestDTO, TransactionHistoryRequestDTO,
         TransactionHistoryResponseDTO, TransactionType,
     },
 };
@@ -211,7 +212,7 @@ pub async fn transaction_history(event: Request) -> Result<Response<Body>, Error
     let transaction_result = db_service
         .fetch_related_transactions(&transaction_history_request.address.to_lowercase())
         .await?;
-
+    println!("{:?}", transaction_result);
     let chain_repository = Arc::new(CelestiaRepository::new().await);
     let chain_service = ChainService::new(chain_repository.clone());
 
@@ -228,4 +229,59 @@ pub async fn transaction_history(event: Request) -> Result<Response<Body>, Error
     }
     let json_str = to_string(&transaction_from_node).unwrap();
     Ok(get_success_response(json_str))
+}
+
+//client send the transaction hash and information for us to process
+pub async fn process_crypto_transaction(event: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let process_crypto_transaction_request: ProcessCryptoTransactionRequestDTO =
+        serde_json::from_str(&body_str)?;
+
+    match web3_service
+        .process_crypto_transaction(process_crypto_transaction_request.data)
+        .await
+    {
+        Ok(response) => {
+            let json_value = serde_json::to_value(response.clone())?;
+            let final_response = process_success_response(
+                json_value,
+                TransactionType::CryptoTransfer,
+                &response.clone().sender_address.to_lowercase(),
+            )
+            .await;
+            Ok(final_response)
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
+}
+
+//client send the transaction hash and information for us to process
+pub async fn process_crypto_swap(event: Request) -> Result<Response<Body>, Error> {
+    let repository = Arc::new(InfuraRepository::new());
+    let web3_service = Web3Service::new(repository);
+
+    let body = event.body();
+    let body_str = String::from_utf8(body.as_ref().to_vec())?;
+    let process_crypto_swap_request: ProcessCryptoSwapRequestDTO = serde_json::from_str(&body_str)?;
+
+    match web3_service
+        .process_crypto_swap(process_crypto_swap_request.data)
+        .await
+    {
+        Ok(response) => {
+            let json_value = serde_json::to_value(response.clone())?;
+            let final_response = process_success_response(
+                json_value,
+                TransactionType::Swap,
+                &response.clone().address.to_lowercase(),
+            )
+            .await;
+            Ok(final_response)
+        }
+        Err(err) => Ok(get_failed_response(err.to_string(), "Failed")),
+    }
 }

@@ -1,22 +1,29 @@
 use crate::contract_abi::{CT_LINK, CT_ROUTER02, CT_USDC, CT_WETH};
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use domain::{
     repository::web3_repository::Web3Repository,
-    shared::dtos::{CryptoSwapResponseDTO, CryptoTransactionResponseDTO},
+    shared::dtos::{
+        CryptoSwapResponseDTO, CryptoTransactionResponseDTO, ProcessCryptoSwapResponseDTO,
+        ProcessCryptoTransactionResponseDTO,
+    },
 };
 use ethers::{
-    abi::Abi,
+    abi::{decode, Abi, ParamType},
     core::rand::thread_rng,
     prelude::*,
     utils::{self, parse_units},
 };
+use serde_json::{to_string, Value};
 use std::{
     env,
+    ops::Deref,
+    str::FromStr,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::time::sleep;
 
 pub struct InfuraRepository {
     pub provider: Provider<Http>,
@@ -414,5 +421,36 @@ impl Web3Repository for InfuraRepository {
             timestamp: Utc::now().timestamp().to_string(),
         };
         Ok(response_dto)
+    }
+
+    async fn process_crypto_transaction(
+        &self,
+        data: Value,
+    ) -> Result<ProcessCryptoTransactionResponseDTO> {
+        // ✅ Poll for receipt (10 retries, every 3 seconds)
+        let mut response = serde_json::from_value::<ProcessCryptoTransactionResponseDTO>(data)?;
+        let hash: TxHash = response.transaction_hash.parse().unwrap();
+        for _ in 0..10 {
+            if let Ok(Some(receipt)) = self.provider.get_transaction_receipt(hash).await {
+                response.transaction_hash = format!("{:?}", receipt.transaction_hash);
+                return Ok(response);
+            }
+            sleep(Duration::from_secs(3)).await;
+        }
+        Ok(response)
+    }
+
+    async fn process_crypto_swap(&self, data: Value) -> Result<ProcessCryptoSwapResponseDTO> {
+        // ✅ Poll for receipt (10 retries, every 3 seconds)
+        let mut response = serde_json::from_value::<ProcessCryptoSwapResponseDTO>(data)?;
+        let hash: TxHash = response.transaction_hash.parse().unwrap();
+        for _ in 0..10 {
+            if let Ok(Some(receipt)) = self.provider.get_transaction_receipt(hash).await {
+                response.transaction_hash = format!("{:?}", receipt.transaction_hash);
+                return Ok(response);
+            }
+            sleep(Duration::from_secs(3)).await;
+        }
+        Ok(response)
     }
 }
